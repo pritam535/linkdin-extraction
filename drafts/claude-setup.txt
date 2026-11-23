@@ -1,0 +1,23 @@
+Here's the exact setup I'm using to write LinkedIn posts with Claude, without them sounding like Claude. Steal it.
+
+It's an open-source skill pack: 11 Claude skills for posts, comments, replies, profile reviews and a weekly plan. Link in the first comment.
+
+I read every file before installing it. Skills are instructions an AI follows on your machine, so that step isn't optional. Two small Python scripts, no network calls, nothing that logs into LinkedIn.
+
+The humanizer is the part I didn't expect to like.
+
+It strips em dashes, curly quotes and the invisible characters you can't see in any editor. It swaps out the vocabulary every AI draft seems to share. Then it scores the result on five checks, and the one that surprised me measures how much your sentence length varies, because people write unevenly and models don't.
+
+My new About section scored 67 on the first draft. 88.6 after one round of edits.
+
+It scored my profile too. 21 out of 66 on what it could see.
+
+Ouch.
+
+Next, I'm wiring publishing through LinkedIn's official API with a short terminal script. The token stays in my Mac's Keychain, the script refuses any draft with an unfilled placeholder, and nothing goes out until I type y.
+
+One rule: the AI drafts, I decide what ships. No bots, no auto-comments, no scraping.
+
+Which part of your writing would you never hand to an AI?
+
+#ClaudeAI #SoftwareEngineering #DeveloperTools

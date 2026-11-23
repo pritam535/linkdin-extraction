@@ -1,0 +1,25 @@
+My LinkedIn profile scored 21 out of 66.
+
+So I turned Claude into my LinkedIn editor. Here's everything I set up, so you can copy it.
+
+1. Installed an open-source pack of 11 Claude skills. Posts, comments, replies, DMs, a weekly plan, a profile audit. Free and MIT licensed.
+
+2. Read every file before installing. Two Python scripts, zero network calls, nothing that touches my LinkedIn account. Skills are instructions an AI will follow on your laptop, so if you install anything like this, read it first.
+
+3. Ran the profile audit. Brutal, and fair. A headline that was just my job title. The same company listed three times. Numbers that contradicted each other.
+
+4. Rewrote my About section with it. First draft: 67 on the humanizer. One round of edits: 88.6.
+
+5. Started running everything through that humanizer. It kills em dashes, curly quotes, invisible characters and the words every AI draft seems to share. Then it checks whether your sentences vary in length the way a real person's do.
+
+6. Built a small terminal script for the last step. It runs the humanizer one more time, shows me the cleaned post and its score, and only then publishes through LinkedIn's official API. Token in my Mac's Keychain. Nothing ships until I type y.
+
+The rule I'm keeping is simple, and I don't plan to bend it: Claude drafts, I decide what goes out.
+
+This post went through the same process.
+
+All of it.
+
+Setup steps and the repo are in the first comment. Try the profile audit and tell me your score. I'll go first: 21.
+
+#ClaudeAI #SoftwareEngineering #DeveloperTools

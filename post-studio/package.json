@@ -1,0 +1,27 @@
+{
+  "name": "post-studio",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3009",
+    "build": "next build",
+    "start": "next start -p 3009",
+    "typecheck": "tsc --noEmit",
+    "worker": "tsx scripts/worker.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.10.0",
+    "next": "^15.5.29",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
+  }
+}

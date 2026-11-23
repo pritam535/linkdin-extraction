@@ -1,0 +1,8 @@
+# Terms that must never appear in a published post.
+# One per line, matched case-insensitively as whole words.
+# Wrap in slashes for a regex, e.g. /\$\d+k\+? monthly/
+#
+# Replace these examples with DotKonnekt's real list (client names, internal metrics, NDA terms).
+Well Cure
+Shopify API
+/\b\d[\d,]*\+? daily requests\b/
