@@ -1,0 +1,20 @@
+Here's the whole setup, step by step.
+
+1. The skills (free, MIT, by Jake Schincariol):
+github.com/Jakeschincariol/linkedin-agent-skill
+
+2. Install:
+git clone https://github.com/Jakeschincariol/linkedin-agent-skill.git
+mkdir -p ~/.claude/skills
+cp -r linkedin-agent-skill/skills/li-* ~/.claude/skills/
+
+3. Fill in ~/.claude/linkedin/voice.md (the repo has a template), or paste 3 of your old posts and ask Claude to write it.
+
+4. In Claude Code, try /li-profile first, then /li-post with a raw idea.
+
+5. Check any draft yourself:
+python3 ~/.claude/skills/li-human/detect.py draft.txt
+
+6. Want to publish from the terminal? Use LinkedIn's official API with your own developer app. No bots, no scraping. Those get accounts restricted.
+
+Read the SKILL.md files before you install. 15 minutes, and it's your machine.

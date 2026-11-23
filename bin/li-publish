@@ -1,0 +1,141 @@
+#!/usr/bin/env python3
+"""Humanize a LinkedIn draft, show the cleaned post, then (optionally) publish it
+via LinkedIn's official Posts API after a y/N check.
+
+  li-publish draft.txt            humanize, score, show, ask y/N, post
+  li-publish draft.txt --dry-run  humanize, score, show, save - never posts
+
+The cleaned text is saved next to the draft as <name>.clean.txt.
+Posting needs two macOS Keychain entries (linkedin-token, linkedin-member-id)
+and LI_VERSION set to a currently supported LinkedIn API version (YYYYMM).
+"""
+import difflib, json, os, re, subprocess, sys, urllib.request, urllib.error
+
+SKILL = os.path.expanduser("~/.claude/skills/li-human")
+HUMANIZE = os.path.join(SKILL, "humanize.py")
+DETECT = os.path.join(SKILL, "detect.py")
+
+
+def keychain(name):
+    r = subprocess.run(["security", "find-generic-password", "-s", name, "-w"],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        sys.exit(f"Missing Keychain entry '{name}'. Add it with:\n"
+                 f"  security add-generic-password -a \"$USER\" -s {name} -w")
+    return r.stdout.strip()
+
+
+def humanize(path):
+    """Run the li-human humanizer. Returns (clean_text, report_dict)."""
+    r = subprocess.run([sys.executable, "-I", HUMANIZE, path, "--json"],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        sys.exit(f"humanize.py failed:\n{r.stderr}")
+    data = json.loads(r.stdout)
+    text = data["text"].strip()
+    # Known humanizer side effect: deleting a phrase can leave ".." behind.
+    text = re.sub(r"(?<!\.)\.\.(?!\.)", ".", text)
+    return text, data["report"]
+
+
+def show_report(report):
+    fixed = [*report["invisible"], *report["typographic"]]
+    for h in fixed:
+        print(f"  fixed {h['count']}x {h['name']}")
+    for h in report["lexical"]:
+        print(f"  replaced {h['count']}x '{h['find']}' -> {h['replace']}")
+    for h in report["structures"]:
+        print(f"  FLAG  {h['name']}: {h['fix']}")
+    if not any(report.values()):
+        print("  nothing to strip")
+
+
+def score(path):
+    r = subprocess.run([sys.executable, "-I", DETECT, path, "--json"],
+                       capture_output=True, text=True)
+    d = json.loads(r.stdout)
+    weakest = min(d["checks"], key=lambda k: d["checks"][k]["score"])
+    return d["human_score"], d["verdict"], weakest
+
+
+def main():
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    dry = "--dry-run" in sys.argv
+    if len(args) != 1:
+        sys.exit("usage: li-publish <draft.txt> [--dry-run]")
+    src = args[0]
+    original = open(src, encoding="utf-8").read().strip()
+
+    if "{{" in original:
+        sys.exit("Refusing: draft still has {{placeholders}}. Fill them in first.")
+
+    # 1. Humanize
+    print("\nHUMANIZER")
+    text, report = humanize(src)
+    show_report(report)
+
+    base, _ = os.path.splitext(src)
+    clean_path = base + ".clean.txt"
+    with open(clean_path, "w", encoding="utf-8") as fh:
+        fh.write(text + "\n")
+
+    # Word swaps can change meaning (e.g. a quoted example word), so show them.
+    if report["lexical"]:
+        print("\nCHANGED LINES (check the meaning still holds)")
+        for line in difflib.unified_diff(original.splitlines(), text.splitlines(),
+                                         lineterm="", n=0):
+            if line.startswith(("-", "+")) and not line.startswith(("---", "+++")):
+                print("  " + line)
+
+    # 2. Score
+    hs, verdict, weakest = score(clean_path)
+    print(f"\nHUMAN SCORE {hs} {verdict}" + ("" if verdict == "PASS" else f"  (weakest: {weakest})"))
+    if report["structures"]:
+        print("Structural tells were flagged above. Rewrite those lines by hand.")
+
+    # 3. Return the draft
+    print("\n" + "-" * 60 + "\n" + text + "\n" + "-" * 60)
+    print(f"{len(text)} characters  ·  saved to {clean_path}")
+
+    if len(text) > 3000:
+        sys.exit(f"Refusing to post: {len(text)} chars, LinkedIn's limit is 3,000.")
+    if dry:
+        print("Dry run: nothing posted.")
+        return
+
+    # 4. Publish (only after an explicit y)
+    version = os.environ.get("LI_VERSION")
+    if not version:
+        sys.exit("Set LI_VERSION to a current LinkedIn API version (YYYYMM) from the docs.")
+    token = keychain("linkedin-token")
+    member = keychain("linkedin-member-id")
+
+    if verdict != "PASS":
+        print(f"Warning: humanizer verdict is {verdict}, not PASS.")
+    if input("Post THIS cleaned version to LinkedIn? (y/N) ").strip().lower() != "y":
+        sys.exit("Not posted.")
+
+    body = {
+        "author": f"urn:li:person:{member}",
+        "commentary": text,
+        "visibility": "PUBLIC",
+        "distribution": {"feedDistribution": "MAIN_FEED", "targetEntities": [],
+                         "thirdPartyDistributionChannels": []},
+        "lifecycleState": "PUBLISHED",
+        "isReshareDisabledByAuthor": False,
+    }
+    req = urllib.request.Request(
+        "https://api.linkedin.com/rest/posts", data=json.dumps(body).encode(), method="POST",
+        headers={"Authorization": f"Bearer {token}",
+                 "Content-Type": "application/json",
+                 "LinkedIn-Version": version,
+                 "X-Restli-Protocol-Version": "2.0.0"})
+    try:
+        with urllib.request.urlopen(req) as r:
+            print("Posted. ID:", r.headers.get("x-restli-id"))
+    except urllib.error.HTTPError as e:
+        sys.exit(f"LinkedIn returned {e.code}: {e.read().decode()}")
+
+
+if __name__ == "__main__":
+    main()

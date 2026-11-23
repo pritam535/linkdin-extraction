@@ -1,0 +1,15 @@
+node_modules
+.next
+next-env.d.ts
+data/approvals.jsonl
+.env*.local
+*.tsbuildinfo
+data/queue.json
+data/images/
+data/shots/
+data/linkedin.json
+data/profile.json
+data/profile.pdf
+data/settings.json
+data/worker.json
+data/market.json
