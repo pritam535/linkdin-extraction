@@ -89,7 +89,7 @@ export default function EngageToday() {
 
       {!t ? (
         <p className="meta" style={{ margin: 0 }}>
-          Build your weekly plan to get daily targets: <Link href="/plan#profile-plan">Plan → From your profile → Plan my week</Link>.
+          Build your weekly plan to get daily targets: <Link href="/plan#week">Plan → Your week → Plan my week</Link>.
         </p>
       ) : (
         <>
@@ -124,7 +124,7 @@ export default function EngageToday() {
             ))}
           </div>
           <div className="row" style={{ justifyContent: "space-between" }}>
-            <Link href="/plan#comment" className="btn secondary small"><Icon name="sparkle" size={13} /> Draft a comment</Link>
+            <Link href="/engage#comment" className="btn secondary small"><Icon name="sparkle" size={13} /> Draft a comment</Link>
             <button className="ghost small" onClick={toggleRemind} aria-pressed={remind}>
               <Icon name="clock" size={13} /> {remind ? "Reminder on" : "Remind me before posts"}
             </button>

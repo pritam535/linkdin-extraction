@@ -4,10 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import { structured } from "./llm";
 import { loadSettings } from "./settings";
+import { skillDir } from "./skills";
 import { z } from "zod";
 
 const HOME = os.homedir();
-const LI_POST_DIR = process.env.LI_POST_DIR ?? path.join(HOME, ".claude/skills/li-post");
+const LI_POST_DIR = process.env.LI_POST_DIR ?? skillDir("li-post");
 const VOICE_FILE = process.env.VOICE_FILE ?? path.join(HOME, ".claude/linkedin/voice.md");
 
 export const DraftSchema = z.object({

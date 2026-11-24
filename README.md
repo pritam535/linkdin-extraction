@@ -15,7 +15,7 @@ AI-drafted LinkedIn posts with a human approval gate.
 | [`drafts/`](drafts/) | Early drafts and their humanized `.clean.txt` versions. |
 | [`docs/`](docs/) | The submission PDF and its HTML source. |
 
-Post Studio uses the open-source [LinkedIn agent skill pack](https://github.com/Jakeschincariol/linkedin-agent-skill) by Jake Schincariol (MIT), installed into `~/.claude/skills` (li-post, li-human, li-profile and others).
+Post Studio uses the open-source [LinkedIn agent skill pack](https://github.com/Jakeschincariol/linkedin-agent-skill) by Jake Schincariol (MIT). The 11 skills are **bundled in [`post-studio/skills/`](post-studio/skills/)**, so nothing extra to install. If you have them in `~/.claude/skills`, your copy is used instead.
 
 ## How it connects
 

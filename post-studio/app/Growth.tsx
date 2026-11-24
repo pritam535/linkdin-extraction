@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import type { GrowthState, Plan, Score } from "@/lib/growth";
+import type { GrowthState, Plan, PlanBasis, Score } from "@/lib/growth";
 import { liSearchUrl } from "./components/ui";
 
 /** Tomorrow + offset, at HH:MM local time. */
@@ -23,7 +23,7 @@ const Copy = ({ text }: { text: string }) => (
 /** Saved score and plan, shared by Onboarding (score) and Plan (posts). */
 function useGrowth() {
   const [score, setScore] = useState<(Score & { at: string; via?: string }) | null>(null);
-  const [plan, setPlan] = useState<(Plan & { at: string; via?: string }) | null>(null);
+  const [plan, setPlan] = useState<(Plan & { at: string; via?: string; basis?: PlanBasis }) | null>(null);
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     fetch("/api/profile/score")
@@ -111,18 +111,20 @@ export function ProfileScore({ onScored }: { onScored?: (scored: boolean) => voi
   );
 }
 
-type SavedPlan = Plan & { at: string; via?: string };
+export type SavedPlan = Plan & { at: string; via?: string; basis?: PlanBasis };
 
 /** One loaded weekly plan, shared by the Plan page's tabs (rebuild in one tab updates all). */
 export function usePlan() {
   const { score, plan, setPlan, loaded } = useGrowth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  async function build() {
+  /** Builds a plan. With no options it repeats what the current plan was built from. */
+  async function build(opts?: PlanBasis) {
     setBusy(true);
     setError(null);
     try {
-      const r = await fetch("/api/profile/plan", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const body = opts ?? plan?.basis ?? {};
+      const r = await fetch("/api/profile/plan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error ?? "Plan failed");
       setPlan(d);
@@ -148,7 +150,7 @@ export function PlanBuilder({ p, what }: { p: PlanState; what: string }) {
   return (
     <div className="plan-builder">
       <div className="row" style={{ marginTop: 0 }}>
-        <button onClick={p.build} disabled={p.busy || !p.score} className={p.plan ? "secondary" : ""}>
+        <button onClick={() => p.build()} disabled={p.busy || !p.score} className={p.plan ? "secondary" : ""}>
           {p.busy ? "Claude is planning (about a minute)…" : p.plan ? "Rebuild my plan" : "Plan my week"}
         </button>
         <span className="meta">
@@ -213,8 +215,8 @@ export function EngagePlan({ plan }: { plan: SavedPlan }) {
   return (
     <div className="stack">
       <div className="engage-groups">
-        {e.groups.map((g) => (
-          <div key={g.kind} className="engage-group">
+        {e.groups.map((g, i) => (
+          <div key={`${g.kind}-${i}`} className="engage-group">
             <div className="row tight" style={{ marginTop: 0, justifyContent: "space-between" }}>
               <b style={{ textTransform: "capitalize" }}>{g.kind}</b>
               <span className="badge plain b-queued">{g.count} a day</span>

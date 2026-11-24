@@ -20,12 +20,12 @@ const STEPS: Step[] = [
 ];
 
 const ADVANCED: { href: string; label: string; icon: IconName; match: (path: string) => boolean }[] = [
-  { href: "/", label: "Overview", icon: "home", match: (p) => p === "/" },
   { href: "/posts", label: "All posts", icon: "list", match: (p) => p === "/posts" },
+  { href: "/engage", label: "Engage", icon: "user", match: (p) => p.startsWith("/engage") },
+  { href: "/profile", label: "Profile fixes", icon: "edit", match: (p) => p.startsWith("/profile") },
   { href: "/keywords", label: "Keywords", icon: "tag", match: (p) => p.startsWith("/keywords") },
 ];
 
-const ADV_KEY = "ps.advancedOpen";
 
 /** Short live status for each step, from the shared studio data. */
 function useStepStatus() {
@@ -74,25 +74,18 @@ function Steps({ compact }: { compact?: boolean }) {
 
 function Advanced() {
   const path = usePathname();
-  const here = ADVANCED.some((a) => a.match(path));
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    let saved = false;
-    try { saved = localStorage.getItem(ADV_KEY) === "1"; } catch {}
-    setOpen(saved || here);
-  }, [here]);
-  const toggle = () => {
-    const next = !open;
-    setOpen(next);
-    try { localStorage.setItem(ADV_KEY, next ? "1" : "0"); } catch {}
-  };
+  const [open, setOpen] = useState(false); // always starts closed
+  const current = ADVANCED.find((a) => a.match(path));
+  // Closed again after you pick a page, so it only ever shows when you ask for it.
+  useEffect(() => setOpen(false), [path]);
   return (
     <div className="advanced">
-      <button type="button" className="adv-toggle" aria-expanded={open} onClick={toggle}>
+      <button type="button" className={`adv-toggle ${current && !open ? "here" : ""}`} aria-expanded={open} aria-controls="advanced-nav" onClick={() => setOpen((o) => !o)}>
         <span className={`caret ${open ? "open" : ""}`} aria-hidden>▶</span> Advanced tools
+        {current && !open && <span className="adv-current">{current.label}</span>}
       </button>
       {open && (
-        <nav className="nav" aria-label="Advanced tools">
+        <nav id="advanced-nav" className="nav" aria-label="Advanced tools">
           {ADVANCED.map((a) => {
             const active = a.match(path);
             return (

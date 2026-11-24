@@ -183,12 +183,12 @@ export default function SettingsPage() {
               <label className="field">
                 <span className="field-label">Who you write for <span className="req">Required</span></span>
                 <input type="text" value={s.audience} onChange={(e) => setS({ ...s, audience: e.target.value })} placeholder="e.g. Frontend engineers and engineering managers in India" maxLength={400} />
-                <span className="field-help"><b>Used for:</b> finding what this audience is talking about (Plan → What&apos;s trending), and tuning &quot;Rewrite in my voice&quot; and punch lines in Review.<br /><b>Why:</b> a post written for a specific reader gets more replies than one written for everyone. Be specific: role, seniority, region.</span>
+                <span className="field-help"><b>Used for:</b> finding what this audience is talking about (Plan → Trending topics), and tuning &quot;Rewrite in my voice&quot; and punch lines in Review.<br /><b>Why:</b> a post written for a specific reader gets more replies than one written for everyone. Be specific: role, seniority, region.</span>
               </label>
               <label className="field">
                 <span className="field-label">People or companies you want to be visible to <span className="opt">Optional · one per line</span></span>
                 <textarea style={{ minHeight: 70 }} value={s.people} onChange={(e) => setS({ ...s, people: e.target.value })} placeholder={"e.g. Vercel\nFrontend leads in Bangalore"} />
-                <span className="field-help"><b>Used for:</b> the engagement list in your weekly plan (Plan → From your profile): whose posts to comment on, and what to add.<br /><b>Why:</b> commenting where these people already are puts your name in front of them. Only names you list are used; leave it empty and Plan suggests the kinds of people to look for. Post Studio never comments for you.</span>
+                <span className="field-help"><b>Used for:</b> the engagement list (Advanced tools → Engage): whose posts to comment on, and what to add.<br /><b>Why:</b> commenting where these people already are puts your name in front of them. Only names you list are used; leave it empty and Plan suggests the kinds of people to look for. Post Studio never comments for you.</span>
               </label>
               <div className="row">
                 <button onClick={() => save("about", { approverName: s.approverName, audience: s.audience, focus: s.focus, people: s.people }, "Saved. Plan will use these.")} disabled={!aboutDirty || busy === "about"}>

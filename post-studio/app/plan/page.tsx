@@ -2,52 +2,67 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { QueueItem } from "@/lib/queue";
 import type { Settings } from "@/lib/settings";
-import { EngagePlan, PlanBuilder, ProfileFixes, WeekPosts, usePlan } from "../Growth";
+import { WeekPosts, usePlan } from "../Growth";
 import MarketCard from "../keywords/MarketCard";
-import CommentHelper from "./CommentHelper";
-import EngageToday from "../components/EngageToday";
+import ProfileTopics from "./ProfileTopics";
+import type { Topic } from "./TopicGrid";
+import WeekControls from "./WeekControls";
+import { MAX_TOPICS, usePlanSettings } from "./usePlanSettings";
 import { api, useStudio, useToast } from "../components/providers";
-import { Icon, PageHead, type IconName } from "../components/ui";
+import { Icon, PageHead, Spinner, type IconName } from "../components/ui";
 
-type Tab = "trending" | "week" | "engage" | "profile";
+type Tab = "trending" | "week";
 
 const TABS: { id: Tab; label: string; icon: IconName; blurb: string }[] = [
-  { id: "trending", label: "Trending topics", icon: "search", blurb: "What your audience is talking about right now. Pick a topic and Claude drafts a post from your own experience." },
-  { id: "week", label: "Your week", icon: "calendar", blurb: "Four posts for next week, built from your profile. Fill the blanks, then send one to Review." },
-  { id: "engage", label: "Engage", icon: "user", blurb: "Whose posts to comment on each day, and help drafting the comment. You post it yourself." },
-  { id: "profile", label: "Profile fixes", icon: "edit", blurb: "Rewrites for your headline, About and experience. Copy them into LinkedIn yourself." },
+  { id: "trending", label: "Topic ideas", icon: "search", blurb: "Topics and keywords from your own profile and from what your audience is talking about. Select the ones you like, then plan your week or draft a post around them." },
+  { id: "week", label: "Your week", icon: "calendar", blurb: "Posts for next week, built from your profile and the topics you selected. Fill the blanks, then send one to Review." },
 ];
 
-/** Old anchors (#trending, #profile-plan, #comment) and new ones open the right tab. */
-const fromHash = (h: string): Tab | null =>
-  h === "trending" ? "trending"
-  : h === "week" || h === "profile-plan" ? "week"
-  : h === "engage" || h === "comment" ? "engage"
-  : h === "profile" || h === "profile-fixes" ? "profile"
-  : null;
+/** Old anchors (#trending, #profile-plan) and new ones open the right tab. */
+const fromHash = (h: string): Tab | null => (h === "trending" ? "trending" : h === "week" || h === "profile-plan" ? "week" : null);
+
+/** Engage and Profile fixes moved to Advanced tools; old /plan#engage style links go there. */
+const movedTo = (h: string): string | null =>
+  h === "engage" || h === "comment" ? "/engage" : h === "profile" || h === "profile-fixes" ? "/profile" : null;
 
 const TAB_KEY = "ps.planTab";
 
-/** Step 2: ideas from what's trending and from your profile, in four tabs. */
+/** Step 2: ideas from what's trending and from your profile, in two tabs. */
 export default function PlanPage() {
   const router = useRouter();
   const { refresh } = useStudio();
   const toast = useToast();
   const plan = usePlan();
+  const settings = usePlanSettings();
+  const [profileKw, setProfileKw] = useState<Topic[] | null>(null); // null = not loaded yet
+  const [marketKw, setMarketKw] = useState<Topic[] | null>(null);
+  const { picked, setPicked } = settings;
+  const toggle = useCallback((k: string) => setPicked((p) => (p.includes(k) ? p.filter((x) => x !== k) : p.length >= MAX_TOPICS ? p : [...p, k])), [setPicked]);
+
+  // A refresh can drop topics you had selected: once both lists are loaded, keep only ones that still exist.
+  useEffect(() => {
+    if (!profileKw || !marketKw) return;
+    const valid = new Set([...profileKw, ...marketKw].map((t) => t.keyword));
+    setPicked((p) => (p.every((k) => valid.has(k)) ? p : p.filter((k) => valid.has(k))));
+  }, [profileKw, marketKw, setPicked]);
   const [s, setS] = useState<Settings | null>(null);
   const [tab, setTab] = useState<Tab>("trending");
 
   useEffect(() => {
     api<{ settings: Settings }>("/api/settings").then((d) => setS(d.settings)).catch(() => {});
+    const moved = movedTo(window.location.hash.slice(1));
+    if (moved) { router.replace(moved + (window.location.hash === "#comment" ? "#comment" : "")); return; }
     const h = fromHash(window.location.hash.slice(1));
     let saved: Tab | null = null;
     try { saved = fromHash(localStorage.getItem(TAB_KEY) ?? ""); } catch {}
     if (h || saved) setTab((h ?? saved)!);
     // Links to /plan#engage etc. while already on this page only change the hash.
     const onHash = () => {
+      const m = movedTo(window.location.hash.slice(1));
+      if (m) return router.replace(m);
       const t = fromHash(window.location.hash.slice(1));
       if (t) setTab(t);
     };
@@ -79,7 +94,6 @@ export default function PlanPage() {
   const p = plan.plan;
   const count: Partial<Record<Tab, string>> = {
     week: p ? `${p.week.length}` : undefined,
-    engage: p ? `${p.engagement.groups.reduce((a, g) => a + g.count, 0)}/day` : undefined,
   };
   const current = TABS.find((t) => t.id === tab)!;
 
@@ -109,39 +123,51 @@ export default function PlanPage() {
       <section className="card plan-panel" role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
         <p className="plan-blurb">{current.blurb}</p>
 
-        {tab === "trending" && <MarketCard />}
+        {/* Kept mounted (just hidden) so a running search survives switching tabs. */}
+        <div hidden={tab !== "trending"}>
+          <div className="idea-section">
+            <h3 className="idea-head"><span className="num">1</span> From your profile</h3>
+            <p className="idea-sub">Topics and keywords where you have real proof to share. Built from your profile, nothing looked up online.</p>
+            <ProfileTopics picked={picked} toggle={toggle} full={picked.length >= MAX_TOPICS} hasProfile={!!plan.score} profileLoaded={plan.loaded} onTopics={setProfileKw} />
+          </div>
+          <div className="idea-section">
+            <h3 className="idea-head"><span className="num">2</span> Top keywords in the market</h3>
+            <p className="idea-sub">What your audience is talking about right now, researched on the web, each with sources.</p>
+            <MarketCard picked={picked} toggle={toggle} full={picked.length >= MAX_TOPICS} onTopics={setMarketKw} />
+          </div>
+
+          {picked.length > 0 && (
+            <div className="pick-bar" role="region" aria-label="Selected topics">
+              <div style={{ minWidth: 0 }}>
+                <b>{picked.length} topic{picked.length === 1 ? "" : "s"} selected</b>
+                <div className="pick-list">
+                  {picked.map((k) => <span key={k} className="tag">{[...(profileKw ?? []), ...(marketKw ?? [])].find((x) => x.keyword === k)?.hashtag || k}</span>)}
+                </div>
+              </div>
+              <span className="row tight" style={{ marginTop: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                <button className="ghost small" onClick={() => setPicked([])}>Clear</button>
+                {picked.length <= 4 ? (
+                  <Link className="btn secondary" href={`/compose?${picked.map((k) => `trend=${encodeURIComponent(k)}`).join("&")}`} title="Claude writes one post that links these topics to your own experience">
+                    <Icon name="pen" size={14} /> Draft one post
+                  </Link>
+                ) : (
+                  <button className="secondary" disabled title="A single post combines up to 4 topics"><Icon name="pen" size={14} /> Draft one post (max 4)</button>
+                )}
+                <button onClick={() => { pick("week"); plan.build({ count: settings.count, topics: picked }); }} disabled={plan.busy} title="Rebuild your week of posts around these topics">
+                  {plan.busy ? <><Spinner /> Planning…</> : <><Icon name="calendar" size={14} /> Plan my {settings.count} post{settings.count === 1 ? "" : "s"} with {picked.length === 1 ? "this" : "these"} →</>}
+                </button>
+              </span>
+            </div>
+          )}
+        </div>
 
         {tab === "week" && (
           <div className="stack">
-            <PlanBuilder p={plan} what="four posts for next week" />
-            {p && <WeekPosts plan={p} onUsePost={usePost} />}
+            <WeekControls p={plan} count={settings.count} setCount={settings.setCount} picked={settings.picked} setPicked={settings.setPicked} goTrending={() => pick("trending")} />
+            {p && <div className={`week-wrap ${plan.busy ? "busy" : ""}`}><WeekPosts plan={p} onUsePost={usePost} /></div>}
           </div>
         )}
 
-        {tab === "engage" && (
-          <div className="stack">
-            <ol className="how-steps" aria-label="How to do today's engagement">
-              <li><span>1</span><div><b>Find a post</b>Click a search chip below. LinkedIn opens with matching posts.</div></li>
-              <li><span>2</span><div><b>Copy its text</b>Pick a post where you have a real number or story to add.</div></li>
-              <li><span>3</span><div><b>Draft here</b>Paste it in <a href="#comment">Draft a comment</a>. Claude writes 2 options in your voice.</div></li>
-              <li><span>4</span><div><b>Post and count</b>Copy one, post it on LinkedIn yourself, then tap +1.</div></li>
-            </ol>
-            <EngageToday />
-            <PlanBuilder p={plan} what="your daily engagement list" />
-            {p && <EngagePlan plan={p} />}
-            <div className="sub-card" id="comment">
-              <h3><Icon name="sparkle" size={15} /> Draft a comment</h3>
-              <CommentHelper />
-            </div>
-          </div>
-        )}
-
-        {tab === "profile" && (
-          <div className="stack">
-            <PlanBuilder p={plan} what="profile rewrites" />
-            {p && <ProfileFixes plan={p} />}
-          </div>
-        )}
       </section>
     </div>
   );

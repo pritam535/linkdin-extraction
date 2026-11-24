@@ -6,6 +6,7 @@ import type { GateResult } from "@/lib/gate";
 import type { MarketState } from "@/lib/market";
 import { api } from "../components/providers";
 import { Callout, Icon, Spinner, fmtWhen } from "../components/ui";
+import { ScoreRing } from "./ScoreViz";
 
 // ---------- Counting ----------
 
@@ -25,16 +26,37 @@ export function Counts({ text, max }: { text: string; max?: number }) {
 
 export type Step = { label: string; done: boolean };
 
-export function StepBar({ steps, current }: { steps: Step[]; current: number }) {
+export function StepBar({ steps, current, onSelect, canGo }: { steps: Step[]; current: number; onSelect?: (i: number) => void; canGo?: (i: number) => boolean }) {
   return (
     <ol className="steps" aria-label="Progress">
-      {steps.map((s, i) => (
-        <li key={s.label} className={`${s.done ? "done" : ""} ${i === current ? "current" : ""}`} aria-current={i === current ? "step" : undefined}>
-          <span className="n">{s.done ? <Icon name="check" size={12} /> : i + 1}</span>
-          <span>{s.label}</span>
-        </li>
-      ))}
+      {steps.map((s, i) => {
+        const inner = (
+          <>
+            <span className="n">{s.done ? <Icon name="check" size={12} /> : i + 1}</span>
+            <span>{s.label}</span>
+          </>
+        );
+        return (
+          <li key={s.label} className={`${s.done ? "done" : ""} ${i === current ? "current" : ""}`} aria-current={i === current ? "step" : undefined}>
+            {onSelect && canGo?.(i) ? (
+              <button type="button" className="step-btn" onClick={() => onSelect(i)} title={i === current ? "You are here" : `Go to: ${s.label}`}>{inner}</button>
+            ) : inner}
+          </li>
+        );
+      })}
     </ol>
+  );
+}
+
+/** Back / Continue under each step, so the page opens one step at a time. */
+export function StepNav({ onBack, onNext, nextLabel = "Continue", nextDisabled, hint }: { onBack?: () => void; onNext?: () => void; nextLabel?: string; nextDisabled?: boolean; hint?: ReactNode }) {
+  return (
+    <div className="step-nav">
+      {onBack && <button type="button" className="secondary" onClick={onBack}>← Back</button>}
+      <span className="spacer" />
+      {hint && <span className="meta">{hint}</span>}
+      {onNext && <button type="button" onClick={onNext} disabled={nextDisabled}>{nextLabel} →</button>}
+    </div>
   );
 }
 
@@ -61,7 +83,7 @@ type Suggestion = { text: string; source: "profile" | "post" | "example" | "hint
 
 /** Examples already written into the blank's own label: "…: a, b, c" or "…, e.g. a or b". */
 function hintExamples(label: string): string[] {
-  const m = label.match(/(?:e\.g\.|eg\.?|for example|:)\s*(.+)$/i);
+  const m = label.match(/(?:\be\.g\.|\beg\b\.?|\bfor example\b|:)\s*(.+)$/i); // whole words only: "regressing" must not match "eg"
   if (!m) return [];
   return m[1]
     .split(/,\s*|\s+or\s+/)
@@ -122,6 +144,10 @@ export function BlanksCard({ text, onApply, disabled }: { text: string; onApply:
           {loading ? <><Spinner /> Finding answers…</> : <><Icon name="sparkle" size={14} /> Suggest answers</>}
         </button>
       </div>
+      <p className="blanks-why">
+        <b>Why blanks?</b> Claude only writes facts you&apos;ve given it. Where your post needs a real number, name or detail it doesn&apos;t know, it leaves a blank instead of guessing,
+        because a made-up figure would cost you trust. Fill each one with the true answer and your post stays honest.
+      </p>
       {err && <p className="problem" style={{ margin: "8px 0 0" }}>{err}</p>}
       <div className="stack" style={{ marginTop: 12 }}>
         {blanks.map((b) => {
@@ -194,18 +220,19 @@ export function SettingsCard({ value, onChange, onDefaultAudience, disabled }: {
   const toggle = (k: string) =>
     onChange({ ...value, keywords: value.keywords.includes(k) ? value.keywords.filter((x) => x !== k) : value.keywords.length >= 8 ? value.keywords : [...value.keywords, k] });
 
-  const options: [Mode, string, string][] = [
-    ["clean", "Quick clean", "Fixes punctuation and swaps typical AI words. Instant. Your sentences stay as they are."],
-    ["rewrite", "Rewrite in my voice", "Claude also reworks the opening and flat sentences for your audience. Keeps your facts. About a minute."],
+  const options: [Mode, string, string, string][] = [
+    ["clean", "Quick clean", "Fixes punctuation and swaps typical AI words. Your sentences stay exactly as you wrote them.", "Instant · free"],
+    ["rewrite", "Rewrite in my voice", "Claude also reworks the opening and flat sentences for your audience, using only your facts.", "Claude · about a minute"],
   ];
 
   return (
     <div className="stack">
       <div className="options" role="radiogroup" aria-label="How much to change">
-        {options.map(([m, title, sub]) => (
+        {options.map(([m, title, sub, pill]) => (
           <label key={m} className={`option ${value.mode === m ? "on" : ""}`}>
             <input type="radio" name="mode" checked={value.mode === m} onChange={() => onChange({ ...value, mode: m })} disabled={disabled} />
-            <div><b>{title}{m === "clean" && <span className="tag" style={{ marginLeft: 6 }}>default</span>}</b><span>{sub}</span></div>
+            <div style={{ flex: 1 }}><b>{title}{m === "clean" && <span className="tag" style={{ marginLeft: 6 }}>default</span>}</b><span>{sub}</span></div>
+            <span className={`opt-pill ${m}`}>{pill}</span>
           </label>
         ))}
       </div>
@@ -270,16 +297,22 @@ const TIPS: Record<string, string> = {
 export function ScoreSummary({ gate, action }: { gate: GateResult; action?: ReactNode }) {
   const s = gate.after.human_score;
   const weakest = Object.entries(gate.after.checks).sort((a, b) => a[1].score - b[1].score)[0];
-  const kind = gate.after.verdict === "PASS" ? "good" : gate.after.verdict === "REVIEW" ? "warn" : "error";
+  const blocked = gate.problems.length > 0 || gate.compliance.length > 0; // sounds fine, but something else still stops publishing
+  const kind = gate.after.verdict === "PASS" ? (blocked ? "warn" : "good") : gate.after.verdict === "REVIEW" ? "warn" : "error";
   const title =
-    gate.after.verdict === "PASS" ? "Sounds human. Ready to publish." : gate.after.verdict === "REVIEW" ? "Almost there." : "Still sounds AI-written.";
+    gate.after.verdict === "PASS" ? (blocked ? "Sounds human, but fix the items below first" : "Sounds human. Ready to publish.") : gate.after.verdict === "REVIEW" ? "Almost there" : "Still sounds AI-written";
+  const tip =
+    gate.after.verdict !== "PASS" && weakest ? TIPS[weakest[0]] ?? weakest[1].detail : blocked ? "Everything reads well. Clear the items below and it's ready." : "Every check passed. Nothing more to do here.";
   return (
     <div className="stack">
-      <Callout kind={kind}>
-        <b>{title}</b> Human score <b>{s.toFixed(0)}/100</b>
-        {gate.after.verdict !== "PASS" && weakest && <> · {TIPS[weakest[0]] ?? weakest[1].detail}</>}
-        {action && <div className="row" style={{ marginTop: 8 }}>{action}</div>}
-      </Callout>
+      <div className={`score-card ${kind}`}>
+        <ScoreRing score={s} verdict={gate.after.verdict} size={76} />
+        <div className="sc-body">
+          <b>{title}</b>
+          <p>{tip}</p>
+          {action && <div className="row" style={{ marginTop: 8 }}>{action}</div>}
+        </div>
+      </div>
       {gate.problems.map((p) => <Callout key={p} kind="error">{p}</Callout>)}
       {gate.compliance.length > 0 && (
         <Callout kind="error">Remove these off-limits words before publishing: {gate.compliance.map((h) => h.match).join(", ")}</Callout>

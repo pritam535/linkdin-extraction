@@ -56,8 +56,9 @@ export async function targets(): Promise<Record<EngageGroup, number> & { minutes
   for (const g of plan.engagement.groups) {
     const k = g.kind.toLowerCase().trim() as EngageGroup;
     if (!GROUPS.includes(k)) continue;
-    t[k] = Math.max(0, Math.round(g.count));
-    t.terms[k] = g.search_terms.slice(0, 3);
+    // Claude can return the same kind in several groups (e.g. three "reach" groups): add them up, don't overwrite.
+    t[k] += Math.max(0, Math.round(g.count));
+    t.terms[k] = [...new Set([...t.terms[k], ...g.search_terms])].slice(0, 3);
   }
   return t;
 }
