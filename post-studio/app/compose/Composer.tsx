@@ -12,7 +12,7 @@ import GateReport from "../components/GateReport";
 import { api, useConfirm, useStudio, useToast } from "../components/providers";
 import { Callout, Icon, PageHead, Spinner, StatusBadge, fmtWhen, localInput } from "../components/ui";
 import ImageMaker from "./ImageMaker";
-import { BlanksCard, Counts, HelpPanel, PunchlineCard, ScoreSummary, Section, SettingsCard, StepBar, blanksIn, type Settings } from "./flow";
+import { BlanksCard, Counts, PunchlineCard, ScoreSummary, Section, SettingsCard, StepBar, blanksIn, type Settings } from "./flow";
 
 const MAX_CHARS = 3000;
 const PREVIEW_CHARS = 210;
@@ -24,7 +24,7 @@ export default function Composer() {
   const router = useRouter();
   const params = useSearchParams();
   const editId = params.get("id");
-  const trendParam = params.get("trend");
+  const trendKey = params.getAll("trend").join("|"); // ?trend=a&trend=b: topics picked in Plan
   const { data, refresh } = useStudio();
   const toast = useToast();
   const confirm = useConfirm();
@@ -58,6 +58,16 @@ export default function Composer() {
   const [acceptReview, setAcceptReview] = useState(false);
   const [when, setWhen] = useState<When>("queue");
   const [at, setAt] = useState(() => localInput(new Date(Date.now() + 2 * 3600_000)));
+  // From the Schedule calendar: "+ 08:30" on an open slot opens a new post set to that time.
+  const atParam = params.get("at");
+  useEffect(() => {
+    if (editId || !atParam) return;
+    const d = new Date(atParam);
+    if (!Number.isNaN(d.getTime()) && d > new Date()) {
+      setAt(localInput(d));
+      setWhen("schedule");
+    }
+  }, [editId, atParam]);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [keptImage, setKeptImage] = useState(false);
@@ -82,27 +92,33 @@ export default function Composer() {
       setPlacement(data.settings.linkPlacement);
     }
   }, [data]);
-  const [trend, setTrend] = useState<MarketState["keywords"][number] | null>(null);
+  type TrendItem = MarketState["keywords"][number];
+  const MAX_TRENDS = 4;
+  const [trends, setTrends] = useState<TrendItem[]>([]);
 
-  const pickTrend = (k: MarketState["keywords"][number] | null) => {
-    setTrend(k);
-    if (k) setIdea(`${k.keyword}: ${k.angle || k.why}`);
+  const pickTrends = (list: TrendItem[]) => {
+    setTrends(list);
+    if (list.length === 1) setIdea(`${list[0].keyword}: ${list[0].angle || list[0].why}`);
+    else if (list.length > 1) setIdea(`${list.map((k) => k.keyword).join(" + ")}: ${list[0].angle || list[0].why}`);
   };
+  const toggleTrend = (k: TrendItem) =>
+    pickTrends(trends.some((t) => t.keyword === k.keyword) ? trends.filter((t) => t.keyword !== k.keyword) : [...trends, k].slice(0, MAX_TRENDS));
 
-  // Trending topics from the Keywords page; ?trend=<keyword> opens "Write with Claude" on that topic.
+  // Trending topics picked in Plan; ?trend=<keyword> (repeatable) opens "Write with Claude" on those topics.
   useEffect(() => {
     api<{ market: MarketState | null }>("/api/keywords/market")
       .then(({ market: m }) => {
         setMarket(m);
-        const k = trendParam && m?.keywords.find((x) => x.keyword === trendParam);
-        if (k) {
+        const wanted = trendKey ? trendKey.split("|") : [];
+        const picked = (m?.keywords ?? []).filter((x) => wanted.includes(x.keyword)).slice(0, MAX_TRENDS);
+        if (picked.length) {
           setAiOpen(true);
-          pickTrend(k);
+          pickTrends(picked);
         }
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trendParam]);
+  }, [trendKey]);
 
   const finalText = result ?? original;
   const urls = links.split(/\s+/).map((l) => l.trim()).filter((l) => /^https?:\/\/\S+$/.test(l)).slice(0, 10);
@@ -400,10 +416,10 @@ export default function Composer() {
     try {
       const d = await api<Draft & { model: string }>("/api/draft", {
         method: "POST",
-        json: { idea, facts, trend: trend ? { keyword: trend.keyword, hashtag: trend.hashtag, why: trend.why, angle: trend.angle } : undefined },
+        json: { idea, facts, trends: trends.map((t) => ({ keyword: t.keyword, hashtag: t.hashtag, why: t.why, angle: t.angle })) },
       });
       setAiDraft(d);
-      if (d.draft && trend) setLinks((l) => l.trim() || trend.sources.map((s) => s.url).join("\n"));
+      if (d.draft && trends.length) setLinks((l) => l.trim() || [...new Set(trends.flatMap((t) => t.sources.map((s) => s.url)))].slice(0, 10).join("\n"));
       if (d.draft) {
         setOriginal(d.draft);
         setAiOpen(false);
@@ -422,7 +438,7 @@ export default function Composer() {
   if (loadError)
     return (
       <div className="page">
-        <PageHead title="Humanizer" />
+        <PageHead title="Review" />
         <Callout kind="error">{loadError} <Link href="/posts">Back to posts</Link></Callout>
       </div>
     );
@@ -441,10 +457,10 @@ export default function Composer() {
   return (
     <div className="page">
       <PageHead
-        title={post ? "Edit post" : "Humanizer"}
+        title={post ? "Review post" : "Review"}
         sub={
           <span className="row tight" style={{ display: "inline-flex", gap: 10 }}>
-            {post ? <><StatusBadge post={post} />{post.scheduledAt && <span>{fmtWhen(post.scheduledAt)}</span>}</> : <span>Make AI-written text sound like you, then publish it.</span>}
+            {post ? <><StatusBadge post={post} />{post.scheduledAt && <span>{fmtWhen(post.scheduledAt)}</span>}</> : <span>Write or paste a post, make it sound like you, check it, then approve.</span>}
             {dirty && finalText.trim() && <span className="dirty-dot">Unsaved changes</span>}
           </span>
         }
@@ -455,8 +471,6 @@ export default function Composer() {
           </button>
         )}
       </PageHead>
-
-      <div style={{ marginBottom: 4 }}><HelpPanel /></div>
 
       {post && !editable && (
         <div style={{ marginBottom: 16 }}>
@@ -501,12 +515,12 @@ export default function Composer() {
                 <div>
                   <div className="row tight" style={{ justifyContent: "space-between" }}>
                     <b style={{ fontSize: 13 }}>Start from a trending topic <span className="meta" style={{ fontWeight: 400 }}>(optional)</span></b>
-                    <Link href="/keywords#market" className="meta">{market ? `Researched ${fmtWhen(market.at)} · refresh` : "Find trending topics →"}</Link>
+                    <Link href="/plan#trending" className="meta">{market ? `Researched ${fmtWhen(market.at)} · refresh` : "Find trending topics →"}</Link>
                   </div>
                   {market?.keywords.length ? (
                     <div className="chips" style={{ marginTop: 8 }}>
                       {market.keywords.map((k) => (
-                        <button key={k.keyword} type="button" className={`chip ${trend?.keyword === k.keyword ? "on" : ""}`} onClick={() => pickTrend(trend?.keyword === k.keyword ? null : k)} title={k.why} aria-pressed={trend?.keyword === k.keyword}>
+                        <button key={k.keyword} type="button" className={`chip ${trends.some((t) => t.keyword === k.keyword) ? "on" : ""}`} onClick={() => toggleTrend(k)} title={k.why} aria-pressed={trends.some((t) => t.keyword === k.keyword)} disabled={trends.length >= MAX_TRENDS && !trends.some((t) => t.keyword === k.keyword)}>
                           {k.keyword}
                         </button>
                       ))}
@@ -514,13 +528,19 @@ export default function Composer() {
                   ) : (
                     <p className="meta" style={{ margin: "6px 0 0" }}>No research yet. Keywords → Find trending keywords.</p>
                   )}
-                  {trend && (
+                  {trends.length > 0 && (
                     <div className="callout info" style={{ marginTop: 8, display: "block" }}>
-                      <b>{trend.keyword}</b>{trend.hashtag && <span className="meta"> · {trend.hashtag}</span>}
-                      <div className="meta" style={{ marginTop: 2 }}>{trend.why}</div>
-                      <div className="meta" style={{ marginTop: 4 }}>
-                        Source: {trend.sources.map((s, i) => <span key={s.url}>{i > 0 && ", "}<a href={s.url} target="_blank" rel="noreferrer noopener">{(() => { try { return new URL(s.url).hostname.replace(/^www\./, ""); } catch { return s.url; } })()}</a></span>)}
-                        {" "}· Claude ties it to your own experience and won&apos;t add news details or numbers.
+                      {trends.map((t) => (
+                        <div key={t.keyword} style={{ marginBottom: 6 }}>
+                          <b>{t.keyword}</b>{t.hashtag && <span className="meta"> · {t.hashtag}</span>}
+                          <div className="meta" style={{ marginTop: 2 }}>{t.why}</div>
+                          <div className="meta" style={{ marginTop: 2 }}>
+                            Source: {t.sources.map((s, i) => <span key={s.url}>{i > 0 && ", "}<a href={s.url} target="_blank" rel="noreferrer noopener">{(() => { try { return new URL(s.url).hostname.replace(/^www\./, ""); } catch { return s.url; } })()}</a></span>)}
+                          </div>
+                        </div>
+                      ))}
+                      <div className="meta">
+                        {trends.length > 1 ? `${trends.length} topics: Claude writes one post around the idea that links them, and leaves out any that don't fit.` : "Claude ties it to your own experience"} It won&apos;t add news details or numbers. {trends.length < MAX_TRENDS && "Pick up to 4."}
                       </div>
                     </div>
                   )}
@@ -792,7 +812,7 @@ export default function Composer() {
               {editable && uniqueBlockers.length > 0 && (
                 <ul className="list meta" style={{ marginTop: 10 }}>{uniqueBlockers.map((b) => <li key={b}>{b}</li>)}</ul>
               )}
-              {!data?.live && <p className="meta" style={{ marginBottom: 0 }}>Live posting is off: set <code>POST_STUDIO_LIVE=1</code> in <code>.env.local</code> to post for real.</p>}
+              {!data?.live && <p className="meta" style={{ marginBottom: 0 }}>Test mode: approved posts are recorded but not sent to LinkedIn.</p>}
             </div>
           </section>
         )}

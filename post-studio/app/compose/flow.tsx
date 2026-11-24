@@ -52,48 +52,6 @@ export function Section({ n, title, hint, children, id, accent }: { n: number; t
   );
 }
 
-// ---------- Plain-language help ----------
-
-const HELP: [string, string][] = [
-  ["What is the Humanizer?", "It makes AI-written text read like a person wrote it, so readers don't scroll past it as \"AI content\"."],
-  ["What should I enter?", "A draft post: from ChatGPT, Claude, your notes, or the Profile growth plan. Up to 3,000 characters."],
-  ["How does it work?", "Quick clean fixes punctuation and swaps typical AI words. Rewrite in my voice also has Claude rework the opening and flat sentences for your audience, using only facts already in your text. Then it scores how human it sounds, out of 100."],
-  ["What happens when I click Humanize?", "You'll see your original and the new version side by side, with every change highlighted. Nothing is posted or saved yet."],
-  ["How do I use the result?", "Edit it if you like, then copy it, save it as a draft, add it to your queue, or publish it."],
-];
-
-export function HelpPanel() {
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    try {
-      if (!localStorage.getItem("ps-help-seen")) setOpen(true);
-    } catch {}
-  }, []);
-  const close = () => {
-    setOpen(false);
-    try {
-      localStorage.setItem("ps-help-seen", "1");
-    } catch {}
-  };
-  if (!open)
-    return (
-      <button className="ghost small" onClick={() => setOpen(true)}><Icon name="info" size={14} /> How it works</button>
-    );
-  return (
-    <div className="card help" style={{ marginBottom: 16 }}>
-      <div className="card-head">
-        <h2><Icon name="info" /> How the Humanizer works</h2>
-        <button className="ghost small" onClick={close}>Got it</button>
-      </div>
-      <dl className="help-grid">
-        {HELP.map(([q, a]) => (
-          <div key={q}><dt>{q}</dt><dd>{a}</dd></div>
-        ))}
-      </dl>
-    </div>
-  );
-}
-
 // ---------- Fill in the blanks ----------
 
 const BLANK = /\{\{\s*([^{}]+?)\s*\}\}/g;
@@ -261,7 +219,7 @@ export function SettingsCard({ value, onChange, onDefaultAudience, disabled }: {
           <div>
             <div className="row tight" style={{ justifyContent: "space-between" }}>
               <b style={{ fontSize: 13 }}>Keywords to include <span className="meta" style={{ fontWeight: 400 }}>(optional)</span></b>
-              <Link href="/keywords#market" className="meta">{market ? `Trending, ${fmtWhen(market.at)}` : "Find trending →"}</Link>
+              <Link href="/plan#trending" className="meta">{market ? `Trending, ${fmtWhen(market.at)}` : "Find trending →"}</Link>
             </div>
             <div className="chips" style={{ marginTop: 8 }}>
               {(market?.keywords ?? []).slice(0, 10).map((k) => {
